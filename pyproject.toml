@@ -1,0 +1,35 @@
+[project]
+name = "phototripper"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "cigno5",email = "cigno5@users.noreply.github.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.14.11,<0.15.0)",
+    "pytest (>=9.0.2,<10.0.0)",
+    "mypy (>=1.19.1,<2.0.0)"
+]
+
+[tool.poetry.scripts]
+# Allows you to run `phototripper` from anywhere in the CLI
+phototripper = "phototripper.__main__:main" 
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# Enable Pyflakes (F), pycodestyle (E, W), and isort (I)
+select = ["E", "F", "I"]
