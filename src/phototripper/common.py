@@ -1,5 +1,7 @@
+import configparser
+import os
 from collections import namedtuple
-from math import radians, cos, sin, asin, sqrt
+from math import asin, cos, radians, sin, sqrt
 
 EARTH_RADIUS = 6371000
 
@@ -54,6 +56,38 @@ Logging settings:
         if Context.context is None:
             raise RuntimeError("Context has not been initalized yet")
         return Context.context
+
+
+def load_configuration(configuration_file, parser=None):
+    def _x(var_name):
+        return os.environ.get(var_name, 'THIS_FOLDER_DOESNT_EXIST')
+
+    lookups = [
+        os.path.expanduser(os.path.expandvars(configuration_file)),
+        os.path.join(_x('HOME'), configuration_file),
+        os.path.join(_x('HOME'), '.config', configuration_file),
+        os.path.join(_x('PYSCRIPTS_CONFIG'), configuration_file),
+    ]
+
+    path = None
+
+    for _path in lookups:
+        if os.path.exists(_path):
+            path = _path
+            break
+
+    if path:
+        if parser is None:
+            parser = configparser.ConfigParser()
+        parser.read(path)
+        return parser
+    else:
+        raise ValueError(
+            "Cannot find configuration file %s. "
+            "Put file in $HOME, $HOME/.config/ or specify the "
+            "configuration folder using the environment "
+            "variable $PYSCRIPTS_CONFIG" % configuration_file
+        )
 
 
 def haversine(latlon1, latlon2):
