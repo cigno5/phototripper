@@ -1,7 +1,8 @@
 import argparse
 import sys
 
-from . import gpx, sort
+from . import config, gpx, sort
+from .common import apply_config_to_args
 
 
 def main():
@@ -10,6 +11,7 @@ def main():
 
     sort.register_args(subparsers)
     gpx.register_args(subparsers)
+    config.register_args(subparsers)
 
     args = parser.parse_args()
 
@@ -17,6 +19,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
+    apply_config_to_args(args, args.command)
     args.func(args)
 
 

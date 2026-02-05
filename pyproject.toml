@@ -20,6 +20,10 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.poetry]
+packages = [{include = "phototripper", from = "src"}]
+include = [{path = "src/phototripper/templates/*.ini", format = ["sdist", "wheel"]}]
+
 [dependency-groups]
 dev = [
     "ruff (>=0.14.11,<0.15.0)",

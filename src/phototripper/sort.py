@@ -17,7 +17,7 @@ from .common import (
     FileSettings,
     LocationSettings,
     LoggingSettings,
-    load_configuration,
+    get_google_api_key,
 )
 from .location import GeoTraits, PictureLocation
 from .picture import PictureCluster, PictureInfo
@@ -197,9 +197,9 @@ def register_args(subparsers):
     file_group.add_argument('-s', "--search-dir", help="Search directory")
     file_group.add_argument('-d', "--destination", help="Destination directory")
     file_group.add_argument('--filter', help="Filter files by substring match")
-    file_group.add_argument("--recursive", action='store_true', help="Scan recursively files from root directory")
-    file_group.add_argument("--rename-only", action='store_true', help="Only renames files (without moving them)")
-    file_group.add_argument('-f', '--rename-format', default='{day} - {place}/IMG_{datetime:extended}_{sequence}',
+    file_group.add_argument("--recursive", action='store_true', default=None, help="Scan recursively files from root directory")
+    file_group.add_argument("--rename-only", action='store_true', default=None, help="Only renames files (without moving them)")
+    file_group.add_argument('-f', '--rename-format', default=None,
                             help=f"""
 Renames files according to the specified format, using substitution variables with syntax '{{<var>[:<format>]}}'.
 A slash will create a folder.
@@ -210,15 +210,15 @@ Eg: '{{year}}/{{month}} - {{month:name}}/{{day}} - {{place}}/IMG_{{datetime}}_{{
 Default is '{{day}} - {{place}}/IMG_{{datetime:extended}}_{{sequence}}'""")
 
     log_group = parser.add_argument_group('Logging options')
-    log_group.add_argument("--verbose", action='store_true', help="Logs more")
-    log_group.add_argument('--summary', action='store_true', help="Show summary")
-    log_group.add_argument("--dry-run", action='store_true', help="Don't move/rename files")
+    log_group.add_argument("--verbose", action='store_true', default=None, help="Logs more")
+    log_group.add_argument('--summary', action='store_true', default=None, help="Show summary")
+    log_group.add_argument("--dry-run", action='store_true', default=None, help="Don't move/rename files")
 
     loc_group = parser.add_argument_group('Location service')
-    loc_group.add_argument("--skip-location", action='store_true', help="Don't use location services")
-    loc_group.add_argument("--search-radius", help="Search radius", type=int, default=3000)
-    loc_group.add_argument("--cache", help="JSON service cache folder (default is temp folder)")
-    loc_group.add_argument("--debug", action='store_true', help="Debug geocoding decisions")
+    loc_group.add_argument("--skip-location", action='store_true', default=None, help="Don't use location services")
+    loc_group.add_argument("--search-radius", help="Search radius", type=int, default=None)
+    loc_group.add_argument("--cache", help="JSON service cache folder (default is temp folder)", default=None)
+    loc_group.add_argument("--debug", action='store_true', default=None, help="Debug geocoding decisions")
 
     parser.set_defaults(func=run)
 
@@ -414,7 +414,7 @@ def run(args):
     dest_dir = os.path.abspath(os.path.expanduser(args.destination)) if args.destination else search_dir
 
     logging.debug("Initializing Phototripper...")
-    api_key = load_configuration('.pyscripts-google.ini')['google']['api-key']
+    api_key = get_google_api_key()
     gmaps: googlemaps.Client = googlemaps.Client(api_key)
 
     all_pictures: list[PictureInfo] = []
