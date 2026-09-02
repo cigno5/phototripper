@@ -7,7 +7,7 @@ from datetime import datetime
 from functools import reduce
 from math import sqrt
 
-from .common import haversine, Context
+from .common import Context, haversine
 
 
 class PictureInfo:
@@ -69,7 +69,7 @@ class PictureInfo:
         return haversine(self.get_latlon(), latlon1) if self.has_latlon() else None
 
     def move_files(self, dst_folder, dst_filename_root):
-        from os.path import join, exists, basename, split
+        from os.path import basename, exists, join, split
 
         def new_dest_file(f):
             old_folder, old_basename = split(f)

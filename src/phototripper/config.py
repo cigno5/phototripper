@@ -3,8 +3,8 @@ import os
 import shutil
 
 from .common import (
-    APP_CONFIG_FILENAME,
     _KEY_MAP,
+    APP_CONFIG_FILENAME,
     _find_config_file,
     load_app_config,
 )

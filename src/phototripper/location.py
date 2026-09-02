@@ -1,13 +1,14 @@
-from math import asin, cos, radians, sin, sqrt, pi, exp, log
-import random
-from collections import namedtuple
-import logging
 import json
-import requests
+import logging
 import os
+import random
 import re
-from .common import haversine, Context
+from collections import namedtuple
+from math import asin, cos, exp, log, pi, radians, sin, sqrt
 
+import requests
+
+from .common import Context, haversine
 from .picture import PictureCluster
 
 AddressSegment = namedtuple("AddressSegment", "name, types")
