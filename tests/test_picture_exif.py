@@ -142,10 +142,5 @@ def test_scan_reads_every_file_in_one_call(context, shoot, monkeypatch):
     assert not pictures[2].has_date_time()  # unreadable file, no tags at all
 
 
-def test_scan_matches_the_single_file_read(context, shoot):
-    target = str(shoot / "IMG_001.jpg")
-    assert PictureInfo.scan([target])[0].tags == PictureInfo(target).tags
-
-
 def test_scan_of_nothing(context):
     assert PictureInfo.scan([]) == []

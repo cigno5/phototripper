@@ -2,11 +2,9 @@ import phototripper.sort  # noqa: F401  -- importing a module registers its sett
 from phototripper.common import (
     COMMON_DEFAULTS,
     apply_config_to_args,
-    key_to_attr,
     load_app_config,
     register_defaults,
     registered_modules,
-    scoped_defaults,
 )
 
 
@@ -18,13 +16,13 @@ class Args:
 
 
 def test_module_settings_are_scoped():
-    assert "rename-format" in scoped_defaults("sort")
-    assert "rename-format" not in scoped_defaults("gpx")
-    assert "rename-format" not in scoped_defaults(None)
+    assert "rename-format" in load_app_config("sort")
+    assert "rename-format" not in load_app_config("gpx")
+    assert "rename-format" not in load_app_config(None)
 
     # every module always sees the shared settings
     for key in COMMON_DEFAULTS:
-        assert key in scoped_defaults("gpx")
+        assert key in load_app_config("gpx")
 
 
 def test_sort_registers_itself():
@@ -107,12 +105,7 @@ def test_foreign_attributes_are_never_touched(ini):
     assert args.something_else is None
 
 
-def test_key_to_attr():
-    assert key_to_attr("max-int-secs") == "max_int_secs"
-    assert key_to_attr("verbose") == "verbose"
-
-
 def test_register_defaults_is_idempotent():
     register_defaults("throwaway", {"a-key": 1}, ints={"a-key"})
     register_defaults("throwaway", {"a-key": 2}, ints={"a-key"})
-    assert scoped_defaults("throwaway")["a-key"] == 2
+    assert load_app_config("throwaway")["a-key"] == 2

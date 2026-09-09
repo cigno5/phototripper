@@ -49,8 +49,6 @@ class PictureInfo:
         T_GPS_LONGITUDE: lambda x: float(x),
     }
 
-    TAG_RE = re.compile(r"(?P<tag>\w+)\s*:\s*(?P<value>.+)$")
-
     @staticmethod
     def _convert_tags(raw, file):
         """Convert the raw exiftool values, dropping any the camera mangled."""
@@ -61,22 +59,6 @@ class PictureInfo:
             except (KeyError, TypeError, ValueError):
                 logging.debug(f" > ignoring unreadable {tag} '{value}' in {file}")
         return tags
-
-    @staticmethod
-    def _read_tags(file):
-        """Read the tags of a single file."""
-        out = subprocess.check_output(["exiftool", "-n", "-s",
-                                       *['-' + t for t in PictureInfo.TAGS.keys()],
-                                       file])
-
-        raw = {}
-        for line in out.decode('utf-8').splitlines():
-            match = PictureInfo.TAG_RE.search(line)
-            if match:
-                tag, value = match.groups()
-                raw[tag] = value
-
-        return PictureInfo._convert_tags(raw, file)
 
     @staticmethod
     def _read_tags_batch(files):
@@ -113,11 +95,11 @@ class PictureInfo:
         by_file = cls._read_tags_batch(files)
         return [cls(f, tags=by_file.get(os.path.normpath(f), {})) for f in files]
 
-    def __init__(self, file, tags=None):
+    def __init__(self, file, tags):
         self.file = file
         self.ctx = Context.get()
 
-        self.tags = PictureInfo._read_tags(file) if tags is None else tags
+        self.tags = tags
 
         self.sequence = None
         if PictureInfo.T_SEQUENCE_NUMBER in self.tags and self.tags[PictureInfo.T_SEQUENCE_NUMBER] > 0:

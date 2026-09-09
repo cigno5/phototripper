@@ -1,3 +1,4 @@
+import os
 import shutil
 import struct
 import subprocess
@@ -14,6 +15,23 @@ def reset_context():
     Context.context = None
     yield
     Context.context = None
+
+
+# A real 'gpsbabel -^3' dump, so nothing here has to guess what it prints.
+FORMATS_DUMP = os.path.join(os.path.dirname(__file__), "data",
+                            "gpsbabel_formats.txt")
+
+
+@pytest.fixture
+def gpsbabel_formats(monkeypatch):
+    """Answer "what can this gpsbabel do?" from the dump, not from the binary."""
+    from phototripper import gpsbabel
+
+    with open(FORMATS_DUMP) as handle:
+        formats = gpsbabel.parse_formats(handle.read())
+
+    monkeypatch.setattr(gpsbabel, "list_serial_formats", lambda: formats)
+    return formats
 
 
 @pytest.fixture
@@ -112,6 +130,8 @@ class GpxArgs:
             sidecar=False, overwrite_gps=False, max_int_secs=None,
             max_ext_secs=None, geosync=None, skip_dst_check=True,
             verbose=None, summary=None, dry_run=True,
+            extract=None, wipe=None, logger=None, yes=None,
+            date_from=None, date_to=None,
         )
         self.__dict__.update(kwargs)
 

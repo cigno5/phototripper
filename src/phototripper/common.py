@@ -3,7 +3,6 @@ import logging
 import os
 from collections import namedtuple
 from math import asin, cos, radians, sin, sqrt
-from typing import Optional
 
 EARTH_RADIUS = 6371000
 
@@ -30,13 +29,17 @@ COMMON_DEFAULTS = {
     "dry-run": False,
 }
 
-# Keys that need type conversion from INI string values
-_COMMON_BOOLS = {"recursive", "verbose", "summary", "dry-run"}
-_COMMON_INTS: set[str] = set()
-
 _MODULE_DEFAULTS: dict[str, dict] = {}
-_MODULE_BOOLS: dict[str, set] = {}
-_MODULE_INTS: dict[str, set] = {}
+
+
+def _to_bool(value):
+    return value.lower() in ("true", "yes", "1", "on")
+
+
+# INI values arrive as strings; a key listed here is converted on the way in.
+# Keys are unique across the sections, so one flat table serves them all.
+_CONVERTERS = dict.fromkeys(("recursive", "verbose", "summary", "dry-run"),
+                            _to_bool)
 
 
 def register_defaults(module_name, defaults, bools=(), ints=()):
@@ -47,23 +50,13 @@ def register_defaults(module_name, defaults, bools=(), ints=()):
     list the keys needing conversion from the INI string values.
     """
     _MODULE_DEFAULTS[module_name] = dict(defaults)
-    _MODULE_BOOLS[module_name] = set(bools)
-    _MODULE_INTS[module_name] = set(ints)
+    _CONVERTERS.update(dict.fromkeys(bools, _to_bool))
+    _CONVERTERS.update(dict.fromkeys(ints, int))
 
 
 def registered_modules():
     """Return the names of the modules that declared their own settings."""
     return sorted(_MODULE_DEFAULTS)
-
-
-def scoped_defaults(module_name=None):
-    """Return the hardcoded defaults visible to *module_name*."""
-    return COMMON_DEFAULTS | _MODULE_DEFAULTS.get(module_name, {})
-
-
-def key_to_attr(ini_key):
-    """Translate an INI key into its argparse destination name."""
-    return ini_key.replace("-", "_")
 
 
 def _find_config_file(filename=APP_CONFIG_FILENAME):
@@ -94,15 +87,6 @@ def _read_app_config():
     return parser
 
 
-def _convert(key, value, module_name=None):
-    """Convert an INI string value to the appropriate Python type."""
-    if key in _COMMON_BOOLS or key in _MODULE_BOOLS.get(module_name, ()):
-        return value.lower() in ("true", "yes", "1", "on")
-    if key in _COMMON_INTS or key in _MODULE_INTS.get(module_name, ()):
-        return int(value)
-    return value
-
-
 def load_app_config(module_name=None):
     """Return merged config: hardcoded < [common] < [module].
 
@@ -110,7 +94,7 @@ def load_app_config(module_name=None):
     result to the shared ``[common]`` settings.
     Returns a dict keyed by INI-style names (``"search-dir"``).
     """
-    merged = scoped_defaults(module_name)
+    merged = COMMON_DEFAULTS | _MODULE_DEFAULTS.get(module_name, {})
 
     cfg = _read_app_config()
     if cfg is None:
@@ -120,13 +104,13 @@ def load_app_config(module_name=None):
     if cfg.has_section("common"):
         for key, value in cfg.items("common"):
             if key in merged:
-                merged[key] = _convert(key, value, module_name)
+                merged[key] = _CONVERTERS.get(key, str)(value)
 
     # overlay [module]
     if module_name and cfg.has_section(module_name):
         for key, value in cfg.items(module_name):
             if key in merged:
-                merged[key] = _convert(key, value, module_name)
+                merged[key] = _CONVERTERS.get(key, str)(value)
 
     return merged
 
@@ -143,7 +127,7 @@ def apply_config_to_args(args, module_name):
     config = load_app_config(module_name)
 
     for ini_key, value in config.items():
-        attr = key_to_attr(ini_key)
+        attr = ini_key.replace("-", "_")
         if not hasattr(args, attr):
             continue
         if getattr(args, attr) is None:
@@ -172,7 +156,11 @@ LoggingSettings = namedtuple("LoggingSettings", "verbose, print_summary, debug")
 FileSettings = namedtuple("FileSettings", "search_dir, recursive_search, dest_dir, dry_run, rename_only, rename_pattern")
 GpxSettings = namedtuple("GpxSettings",
                          "track_files, max_int_secs, max_ext_secs, geosync, "
-                         "sidecar, overwrite_gps, skip_dst_check")
+                         "sidecar, overwrite_gps, skip_dst_check, logger")
+
+
+def _yes_no(flag):
+    return 'yes' if flag else 'no'
 
 
 class Context:
@@ -182,12 +170,12 @@ class Context:
                  location_settings: LocationSettings,
                  logging_settings: LoggingSettings,
                  file_settings: FileSettings,
-                 gpx_settings: Optional[GpxSettings] = None):
+                 gpx_settings: GpxSettings | None = None):
 
         self.location_settings: LocationSettings = location_settings
         self.logging_settings: LoggingSettings = logging_settings
         self.file_settings: FileSettings = file_settings
-        self.gpx_settings: Optional[GpxSettings] = gpx_settings
+        self.gpx_settings: GpxSettings | None = gpx_settings
         self._api_key = None
         self._gmaps = None
 
@@ -225,33 +213,25 @@ class Context:
     Max extrapolation (s)   : {gpx.max_ext_secs}
     Camera clock sync       : {gpx.geosync or 'none'}
     Write to                : {'XMP sidecar' if gpx.sidecar else 'original file'}
-    Overwrite existing GPS  : {'yes' if gpx.overwrite_gps else 'no'}
-    Check camera DST        : {'no' if gpx.skip_dst_check else 'yes'}
+    Overwrite existing GPS  : {_yes_no(gpx.overwrite_gps)}
+    Check camera DST        : {_yes_no(not gpx.skip_dst_check)}
+    GPS logger              : {gpx.logger or 'none'}
 """
 
     def _file_block(self):
-        if self.file_settings is None:
-            return ""
-
-        def yes_no(flag):
-            return 'yes' if flag else 'no'
-
         files = self.file_settings
-        lines = [f"    Search directory        : {files.search_dir}",
-                 f"    Recursive search        : {yes_no(files.recursive_search)}"]
 
         # only the subcommands that move files have somewhere to move them to
-        moves_files = files.rename_pattern is not None
-        if moves_files:
-            lines.append(f"    Destination directory   : {files.dest_dir}")
+        moving = f"""    Destination directory   : {files.dest_dir}
+    Rename only             : {_yes_no(files.rename_only)}
+    Rename pattern          : {files.rename_pattern}
+""" if files.rename_pattern else ""
 
-        lines.append(f"    Dry run                 : {yes_no(files.dry_run)}")
-
-        if moves_files:
-            lines.append(f"    Rename only             : {yes_no(files.rename_only)}")
-            lines.append(f"    Rename pattern          : {files.rename_pattern}")
-
-        return "File settings:\n" + "\n".join(lines) + "\n"
+        return f"""File settings:
+    Search directory        : {files.search_dir}
+    Recursive search        : {_yes_no(files.recursive_search)}
+    Dry run                 : {_yes_no(files.dry_run)}
+""" + moving
 
     def _location_block(self):
         if self.location_settings is None:
@@ -266,9 +246,9 @@ class Context:
 
     def _logging_block(self):
         return f"""Logging settings:
-    Verbose                 : {'yes' if self.logging_settings.verbose else 'no'}
-    Print summary           : {'yes' if self.logging_settings.print_summary else 'no'}
-    Debug                   : {'yes' if self.logging_settings.debug else 'no'}
+    Verbose                 : {_yes_no(self.logging_settings.verbose)}
+    Print summary           : {_yes_no(self.logging_settings.print_summary)}
+    Debug                   : {_yes_no(self.logging_settings.debug)}
 """
 
     @staticmethod

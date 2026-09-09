@@ -1,0 +1,66 @@
+file	r-r---	v900		Columbus/Visiontac V900 files (.csv)	v900
+file	rw----	csv		Comma separated values	xcsv
+serial	rwrwrw	garmin		Garmin serial/USB protocol	garmin
+option	garmin	snlen	Length of generated shortnames	integer		1		file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_snlen
+option	garmin	snwhite	Allow whitespace synth. shortnames	boolean				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_snwhite
+option	garmin	deficon	Default icon name	string				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_deficon
+option	garmin	get_posn	Return current position as a waypoint	boolean				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_get_posn
+option	garmin	power_off	Command unit to power itself down	boolean				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_power_off
+option	garmin	erase_t	Erase existing courses when writing new ones	boolean				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_erase_t
+option	garmin	resettime	Sync GPS time to computer time	boolean				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_resettime
+option	garmin	category	Category number to use for written waypoints	integer		1	16	file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_category
+option	garmin	bitscategory	Bitmap of categories	integer		1	65535	file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_bitscategory
+option	garmin	baud	Speed in bits per second of serial port (baud=9600)	integer				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_baud
+option	garmin	codec	override codec to use for device	string				file:///usr/share/doc/gpsbabel/html/fmt_garmin.html#fmt_garmin_o_codec
+serial	r-r---	dg-100		GlobalSat DG-100/BT-335 Download	dg-100
+option	dg-100	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_dg-100.html#fmt_dg-100_o_erase
+option	dg-100	erase_only	Only erase device data, do not download anything	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_dg-100.html#fmt_dg-100_o_erase_only
+serial	r-r---	dg-200		GlobalSat DG-200 Download	dg-200
+option	dg-200	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_dg-200.html#fmt_dg-200_o_erase
+option	dg-200	erase_only	Only erase device data, do not download anything	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_dg-200.html#fmt_dg-200_o_erase_only
+serial	--r---	globalsat		GlobalSat GH625XT GPS training watch	globalsat
+option	globalsat	showlist	list tracks	boolean				file:///usr/share/doc/gpsbabel/html/fmt_globalsat.html#fmt_globalsat_o_showlist
+option	globalsat	dump-file	Dump raw data to this file	outfile				file:///usr/share/doc/gpsbabel/html/fmt_globalsat.html#fmt_globalsat_o_dump-file
+option	globalsat	input-is-dump-file	Dump raw data to this file	boolean				file:///usr/share/doc/gpsbabel/html/fmt_globalsat.html#fmt_globalsat_o_input-is-dump-file
+option	globalsat	timezone	Time zone ID	string				file:///usr/share/doc/gpsbabel/html/fmt_globalsat.html#fmt_globalsat_o_timezone
+serial	--r---	m241		Holux M-241 (MTK based) download	m241
+option	m241	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_m241.html#fmt_m241_o_erase
+option	m241	erase_only	Only erase device data, do not download anything	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_m241.html#fmt_m241_o_erase_only
+option	m241	log_enable	Enable logging after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_m241.html#fmt_m241_o_log_enable
+option	m241	csv	MTK compatible CSV output file	string				file:///usr/share/doc/gpsbabel/html/fmt_m241.html#fmt_m241_o_csv
+option	m241	block_size_kb	Size of blocks in KB to request from device	integer	1	1	64	file:///usr/share/doc/gpsbabel/html/fmt_m241.html#fmt_m241_o_block_size_kb
+serial	r-r---	miniHomer		MiniHomer, a skyTraq Venus 6 based logger (download tracks, waypoints and get/set POI)	miniHomer
+option	miniHomer	baud	Baud rate used for download	integer	115200	0	115200	file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_baud
+option	miniHomer	dump-file	Dump raw data to this file	outfile				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_dump-file
+option	miniHomer	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_erase
+option	miniHomer	first-sector	First sector to be read from the device	integer	0	0	65535	file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_first-sector
+option	miniHomer	initbaud	Baud rate used to init device (0=autodetect)	integer	38400	38400	38400	file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_initbaud
+option	miniHomer	last-sector	Last sector to be read from the device (-1: smart read everything)	integer	-1	-1	65535	file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_last-sector
+option	miniHomer	no-output	Disable output (useful with erase)	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_no-output
+option	miniHomer	read-at-once	Number of sectors to read at once (0=use single sector mode)	integer	255	0	255	file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_read-at-once
+option	miniHomer	Home	POI for Home Symbol as lat:lng[:alt]	string				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_Home
+option	miniHomer	Car	POI for Car Symbol as lat:lng[:alt]	string				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_Car
+option	miniHomer	Boat	POI for Boat Symbol as lat:lng[:alt]	string				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_Boat
+option	miniHomer	Heart	POI for Heart Symbol as lat:lng[:alt]	string				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_Heart
+option	miniHomer	Bar	POI for Bar Symbol as lat:lng[:alt]	string				file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_Bar
+option	miniHomer	gps-utc-offset	Seconds that GPS time tracks UTC (0: best guess)	integer	0			file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_gps-utc-offset
+option	miniHomer	gps-week-rollover	GPS week rollover period we're in (-1: best guess)	integer	-1			file:///usr/share/doc/gpsbabel/html/fmt_miniHomer.html#fmt_miniHomer_o_gps-week-rollover
+serial	r-r---	mtk		MTK Logger (iBlue 747,Qstarz BT-1000,...) download	mtk
+option	mtk	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_mtk.html#fmt_mtk_o_erase
+option	mtk	erase_only	Only erase device data, do not download anything	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_mtk.html#fmt_mtk_o_erase_only
+option	mtk	log_enable	Enable logging after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_mtk.html#fmt_mtk_o_log_enable
+option	mtk	csv	MTK compatible CSV output file	string				file:///usr/share/doc/gpsbabel/html/fmt_mtk.html#fmt_mtk_o_csv
+option	mtk	block_size_kb	Size of blocks in KB to request from device	integer	1	1	64	file:///usr/share/doc/gpsbabel/html/fmt_mtk.html#fmt_mtk_o_block_size_kb
+serial	r-r---	skytraq		SkyTraq Venus based loggers (download)	skytraq
+option	skytraq	erase	Erase device data after download	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_erase
+option	skytraq	targetlocation	Set location finder target location as lat,lng	string				file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_targetlocation
+option	skytraq	configlog	Configure logging parameter as tmin:tmax:dmin:dmax	string				file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_configlog
+option	skytraq	baud	Baud rate used for download	integer	230400	0	230400	file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_baud
+option	skytraq	initbaud	Baud rate used to init device (0=autodetect)	integer	0	4800	230400	file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_initbaud
+option	skytraq	read-at-once	Number of sectors to read at once (0=use single sector mode)	integer	255	0	255	file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_read-at-once
+option	skytraq	first-sector	First sector to be read from the device	integer	0	0	65535	file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_first-sector
+option	skytraq	last-sector	Last sector to be read from the device (-1: smart read everything)	integer	-1	-1	65535	file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_last-sector
+option	skytraq	dump-file	Dump raw data to this file	outfile				file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_dump-file
+option	skytraq	no-output	Disable output (useful with erase)	boolean	0			file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_no-output
+option	skytraq	gps-utc-offset	Seconds that GPS time tracks UTC (0: best guess)	integer	0			file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_gps-utc-offset
+option	skytraq	gps-week-rollover	GPS week rollover period we're in (-1: best guess)	integer	-1			file:///usr/share/doc/gpsbabel/html/fmt_skytraq.html#fmt_skytraq_o_gps-week-rollover

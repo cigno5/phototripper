@@ -7,7 +7,7 @@ import pytest
 
 from phototripper import gpx
 from phototripper.common import Context
-from phototripper.gpx import _offset_hours, resolve_timezones
+from phototripper.gpx import resolve_timezones
 
 from .conftest import MINIMAL_GPX, write_arw
 from .conftest import GpxArgs as Args
@@ -35,12 +35,6 @@ def test_resolve_timezones_is_offline_and_batched(monkeypatch):
     assert zones[MILAN] == "Europe/Rome"
     assert zones[(48.8566, 2.3522)] == "Europe/Paris"
     assert zones[(35.6762, 139.6503)] == "Asia/Tokyo"
-
-
-def test_offset_hours():
-    assert _offset_hours("+02:00") == 2
-    assert _offset_hours("-05:30") == -5.5
-    assert _offset_hours("+00:00") == 0
 
 
 @pytest.fixture

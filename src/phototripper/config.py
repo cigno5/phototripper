@@ -5,7 +5,6 @@ import shutil
 from .common import (
     APP_CONFIG_FILENAME,
     _find_config_file,
-    key_to_attr,
     load_app_config,
     registered_modules,
 )
@@ -74,10 +73,25 @@ def _do_show(module_name):
 
     config = load_app_config(module_name)
 
+    _show_loggers()
+
     print()
     header = f"[{module_name}]" if module_name else "[common]"
     print(f"Effective settings for {header}:")
     for ini_key in sorted(config):
-        attr = key_to_attr(ini_key)
-        value = config[ini_key]
-        print(f"  {attr:20s} = {value}")
+        print(f"  {ini_key.replace('-', '_'):20s} = {config[ini_key]}")
+
+
+def _show_loggers():
+    """Name the configured GPS loggers.
+
+    They live in [logger:<name>] sections rather than a module's own, so
+    load_app_config never sees them and 'config --show' would otherwise give
+    no hint that they are there.
+    """
+    from .gpsbabel import list_profiles
+
+    profiles = list_profiles()
+    if profiles:
+        print(f"\nGPS loggers: {', '.join(sorted(profiles))} "
+              f"(see 'phototripper gpslogger list')")

@@ -241,9 +241,8 @@ Default is '{{day}} - {{place}}/IMG_{{datetime:extended}}_{{sequence}}'""")
 
 def run(args):
     def collect():
-        def add_picture_file(picture_file):
-            logging.debug(f"Adding picture file {os.path.basename(picture_file)}")
-            picture = PictureInfo(picture_file)
+        def add_picture(picture):
+            logging.debug(f"Adding picture file {picture.filename}")
 
             all_pictures.append(picture)
 
@@ -265,8 +264,9 @@ def run(args):
 
         # collects all pictures and read their properties
         logging.info("Collecting pictures...")
-        for _pic_file in discover_files(args.search_dir, args.recursive, args.filter):
-            add_picture_file(_pic_file)
+        files = discover_files(args.search_dir, args.recursive, args.filter)
+        for picture in PictureInfo.scan(files):
+            add_picture(picture)
 
     def move():
         def place_none():

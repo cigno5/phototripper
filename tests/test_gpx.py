@@ -4,7 +4,6 @@ import pytest
 
 from phototripper import gpx
 from phototripper.common import Context
-from phototripper.gpx import humanize
 
 from .conftest import GpxArgs as Args
 
@@ -23,14 +22,6 @@ def report(shoot, caplog):
         return "\n".join(r.getMessage() for r in caplog.records)
 
     return _run
-
-
-@pytest.mark.parametrize("seconds, expected", [
-    (0, "0 s"), (59, "59 s"), (60, "1 min"), (5340, "89 min"),
-    (7200, "2.0 h"), (172800, "2.0 days"),
-])
-def test_humanize(seconds, expected):
-    assert humanize(seconds) == expected
 
 
 def test_every_situation_is_reported_once(report):
@@ -89,15 +80,100 @@ def test_a_track_from_another_day_is_called_out(shoot, caplog):
         gpx.run(Args(search_dir=str(shoot), track=str(other), overwrite_gps=True))
     out = "\n".join(r.getMessage() for r in caplog.records)
 
-    assert "Not a single picture falls near the track" in out
-    assert "too far off to be a tolerance problem" in out, \
+    assert "the track does not cover this shoot" in out, \
         "a 500 day tolerance is not a suggestion worth making"
     assert "0 of 5 picture(s) can be geotagged" in out
 
 
-def test_a_track_is_mandatory(shoot):
-    with pytest.raises(ValueError, match="No GPS track specified"):
+def test_the_track_is_found_beside_the_pictures(shoot, caplog):
+    # the shoot carries its own track.gpx, which is where a track belongs
+    with caplog.at_level(logging.DEBUG):
         gpx.run(Args(search_dir=str(shoot)))
+
+    out = "\n".join(r.getMessage() for r in caplog.records)
+    assert "1 of 5 picture(s) can be geotagged" in out
+
+
+def test_a_bare_name_is_read_from_the_shoot(shoot, caplog):
+    (shoot / "track.gpx").rename(shoot / "holiday.gpx")
+
+    with caplog.at_level(logging.DEBUG):
+        gpx.run(Args(search_dir=str(shoot), track="holiday.gpx"))
+
+    out = "\n".join(r.getMessage() for r in caplog.records)
+    assert str(shoot / "holiday.gpx") in out
+
+
+def test_a_track_that_is_not_there_is_named_in_full(shoot):
+    (shoot / "track.gpx").unlink()
+
+    with pytest.raises(ValueError, match=str(shoot / "track.gpx")):
+        gpx.run(Args(search_dir=str(shoot)))
+
+
+def test_wiping_without_reading_first_is_refused(shoot):
+    with pytest.raises(ValueError, match="gpslogger wipe"):
+        gpx.run(Args(search_dir=str(shoot), wipe=True))
+
+
+def test_extract_reads_the_logger_and_then_geotags(shoot, caplog, monkeypatch,
+                                                   gpsbabel_formats):
+    """--extract is a shortcut, not a second way of doing the geotagging."""
+    from phototripper import gpsbabel
+
+    recorded = shoot / "track.gpx"
+    track = recorded.read_text()
+    recorded.unlink()
+
+    monkeypatch.setattr(gpsbabel, "check", lambda: None)
+    monkeypatch.setattr(gpsbabel, "sanity_check", lambda *a, **kw: None)
+    monkeypatch.setattr(gpsbabel, "resolve_profile",
+                        lambda name=None: gpsbabel.Profile(
+                            "gt730", "skytraq", "/dev/null", "baud=230400"))
+
+    calls = []
+
+    def fake_run(argv, timeout=None):
+        calls.append(argv)
+        (shoot / "track.gpx").write_text(track)
+        return gpsbabel.Result(argv, 0, "", "", False)
+
+    monkeypatch.setattr(gpsbabel, "run", fake_run)
+
+    with caplog.at_level(logging.DEBUG):
+        gpx.run(Args(search_dir=str(shoot), extract=True, dry_run=False))
+
+    out = "\n".join(r.getMessage() for r in caplog.records)
+
+    # the track landed beside the pictures, and was then used as any track is
+    assert calls[0][calls[0].index("-F") + 1] == str(shoot / "track.gpx")
+    assert "erase" not in calls[0][3], "nothing asked for the logger to be cleared"
+    assert "1 of 5 picture(s) can be geotagged" in out
+
+
+def test_a_dry_run_leaves_the_logger_alone(shoot, caplog, monkeypatch,
+                                           gpsbabel_formats):
+    from phototripper import gpsbabel
+
+    (shoot / "track.gpx").unlink()
+
+    monkeypatch.setattr(gpsbabel, "check", lambda: None)
+    monkeypatch.setattr(gpsbabel, "sanity_check", lambda *a, **kw: None)
+    monkeypatch.setattr(gpsbabel, "resolve_profile",
+                        lambda name=None: gpsbabel.Profile(
+                            "gt730", "skytraq", "/dev/null"))
+
+    def refuse(argv, timeout=None):
+        raise AssertionError("a dry run must not talk to the logger")
+
+    monkeypatch.setattr(gpsbabel, "run", refuse)
+
+    with caplog.at_level(logging.DEBUG):
+        gpx.run(Args(search_dir=str(shoot), extract=True, wipe=True, yes=True))
+
+    out = "\n".join(r.getMessage() for r in caplog.records)
+    assert "Dry run, nothing was read" in out
+    assert "nothing follows" in out
 
 
 def latlon(path):

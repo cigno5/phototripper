@@ -7,11 +7,12 @@ import subprocess
 import tempfile
 import time
 from collections import namedtuple
-from datetime import timezone
+from datetime import timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import tabulate
 
+from . import gpsbabel
 from .common import (
     Context,
     FileSettings,
@@ -21,6 +22,12 @@ from .common import (
     register_defaults,
     resolve_target,
     setup_logging,
+)
+from .gpslogger import (
+    DEFAULT_TRACK_NAME,
+    extract_track,
+    preflight,
+    resolve_output,
 )
 from .picture import PictureInfo, format_utc_offset
 from .track import (
@@ -35,13 +42,13 @@ from .track import (
 register_defaults(
     "gpx",
     {
-        "track": None,
         "max-int-secs": None,
         "max-ext-secs": None,
         "geosync": None,
         "sidecar": False,
         "overwrite-gps": False,
         "skip-dst-check": False,
+        "logger": None,
     },
     bools={"sidecar", "overwrite-gps", "skip-dst-check"},
     ints={"max-int-secs", "max-ext-secs"},
@@ -115,11 +122,31 @@ def register_args(subparsers):
     file_group.add_argument('-s', "--search-dir",
                             help="Directory to scan, or a single picture")
     file_group.add_argument('-t', "--track",
-                            help="GPS track: a .gpx file, a comma separated list "
-                                 "of them, or a folder holding them")
+                            help="GPS track: the file to write when extracting, "
+                                 "otherwise a .gpx file, a comma separated list "
+                                 "of them, or a folder holding them. A bare name "
+                                 "sits in the search directory; the default is "
+                                 f"{DEFAULT_TRACK_NAME} there")
     file_group.add_argument('--filter', help="Filter files by substring match")
     file_group.add_argument("--recursive", action='store_true', default=None,
                             help="Scan recursively files from root directory")
+
+    logger_group = parser.add_argument_group('GPS logger options')
+    logger_group.add_argument("--extract", action='store_true', default=None,
+                              help="Read the track off the GPS logger first")
+    logger_group.add_argument("--wipe", action='store_true', default=None,
+                              help="Clear the logger once the track is written "
+                                   "(needs --extract)")
+    logger_group.add_argument("--logger", default=None,
+                              help="Which logger; needed only when several are "
+                                   "set up")
+    logger_group.add_argument("--date-from", default=None,
+                              help="Keep only track points from this moment on, "
+                                   "UTC (YYYY-MM-DD, optionally THH:MM)")
+    logger_group.add_argument("--date-to", default=None,
+                              help="Keep only track points up to this moment, UTC")
+    logger_group.add_argument("--yes", action='store_true', default=None,
+                              help="Don't ask before clearing the logger")
 
     tag_group = parser.add_argument_group('Geotagging options')
     tag_group.add_argument("--sidecar", action='store_true', default=None,
@@ -150,18 +177,9 @@ def register_args(subparsers):
     parser.set_defaults(func=run)
 
 
-DAY_SECS = 24 * 3600
-
 # Past this the pictures and the track simply don't describe the same outing,
 # and suggesting a tolerance that wide would be bad advice rather than a fix.
-IMPLAUSIBLE_SECS = DAY_SECS
-
-
-def _offset_hours(text):
-    """Hours in an offset such as ``+02:00``, signed."""
-    sign = -1 if text.startswith('-') else 1
-    hours, minutes = (int(part) for part in text[1:].split(':'))
-    return sign * (hours + minutes / 60)
+IMPLAUSIBLE_SECS = 24 * 3600
 
 
 def resolve_timezones(latlons):
@@ -202,44 +220,32 @@ def sidecar_of(picture):
     return os.path.join(picture.dirname, picture.filename_root + SIDECAR_EXT)
 
 
-def _or_default(value, fallback):
-    """exiftool applies its own default when a tolerance is left unset."""
-    return fallback if value is None else value
-
-
-def humanize(seconds):
-    """Render a tolerance the way a person reads a duration."""
-    seconds = int(math.ceil(seconds))
-
-    if seconds < 60:
-        return f"{seconds} s"
-    if seconds < 2 * 3600:
-        return f"{seconds / 60:.0f} min"
-    if seconds < 2 * DAY_SECS:
-        return f"{seconds / 3600:.1f} h"
-    return f"{seconds / DAY_SECS:.1f} days"
-
-
 def run(args):
     def check():
         logging.debug("Checking pre-requisites...")
         if not shutil.which("exiftool"):
             raise ValueError("Exiftool is not found in this system")
 
-        if not args.track:
+        if args.wipe and not args.extract:
             raise ValueError(
-                "No GPS track specified: use --track, or set 'track' in the "
-                "[gpx] section of phototripper.ini")
+                "--wipe clears the logger only once the track it held is "
+                "safely written, so it needs --extract. To clear a logger "
+                "without reading it first, use 'phototripper gpslogger wipe'.")
+
+        if args.extract:
+            gpsbabel.check()
 
     def initialize_context():
         gpx_settings = GpxSettings(
             track_files,
-            _or_default(args.max_int_secs, DEFAULT_MAX_INT_SECS),
-            _or_default(args.max_ext_secs, DEFAULT_MAX_EXT_SECS),
+            # 0 is a real tolerance, so only an unset one takes the default
+            DEFAULT_MAX_INT_SECS if args.max_int_secs is None else args.max_int_secs,
+            DEFAULT_MAX_EXT_SECS if args.max_ext_secs is None else args.max_ext_secs,
             args.geosync,
             args.sidecar,
             args.overwrite_gps,
             args.skip_dst_check,
+            args.logger,
         )
 
         _ctx = Context(
@@ -346,10 +352,11 @@ def run(args):
             if issue in (I_GAP, I_BEFORE, I_AFTER):
                 needed = int(math.ceil(max(c.required_secs for c in affected)))
                 option = '--max-int-secs' if issue is I_GAP else '--max-ext-secs'
-                worst = humanize(needed)
+                worst = str(timedelta(seconds=needed))
                 suggestion = (
                     f"{option} {needed}" if needed <= IMPLAUSIBLE_SECS
-                    else "too far off to be a tolerance problem; see below")
+                    else "the track does not cover this shoot; check that it "
+                         "is the right one, and that OffsetTimeOriginal is right")
 
             rows.append(ReportRow(issue.key, len(affected), worst, suggestion))
 
@@ -364,39 +371,6 @@ def run(args):
         logging.info(
             "\nA suggestion can also go in the [gpx] section of phototripper.ini, "
             "without the leading dashes.")
-
-        explain_total_miss()
-
-    def explain_total_miss():
-        """Say why the timelines don't meet, when they plainly don't.
-
-        Only worth saying when every picture carrying a usable time sits more
-        than a day away from the track: anything closer is an ordinary
-        tolerance question, which the issue table already answers.
-        """
-        def distance_from_track(utc):
-            if utc < track.start:
-                return (track.start - utc).total_seconds()
-            if utc > track.end:
-                return (utc - track.end).total_seconds()
-            return 0
-
-        timed = [c for c in candidates if c.utc]
-        if not timed or any(distance_from_track(c.utc) <= IMPLAUSIBLE_SECS
-                            for c in timed):
-            return
-
-        moments = [c.utc for c in timed]
-
-        logging.warning(
-            f"\nNot a single picture falls near the track.\n"
-            f"  pictures span {min(moments):%Y-%m-%d %H:%M:%S} to "
-            f"{max(moments):%Y-%m-%d %H:%M:%S} UTC\n"
-            f"  track spans    {track.start:%Y-%m-%d %H:%M:%S} to "
-            f"{track.end:%Y-%m-%d %H:%M:%S} UTC\n"
-            f"Check that this is the right track, and that the camera's "
-            f"OffsetTimeOriginal is right -- a wrong offset shifts every "
-            f"picture by whole hours.")
 
     def dst_check():
         """Compare the camera's UTC offset with the one in force where we were.
@@ -455,18 +429,19 @@ def run(args):
         for (zone, camera, expected), dates in sorted(mismatches.items()):
             span = f"{min(dates)}" if min(dates) == max(dates) else \
                    f"{min(dates)} .. {max(dates)}"
-            rows.append(DstRow(span, zone,
-                               format_utc_offset(timezone(camera)),
-                               format_utc_offset(timezone(expected)),
-                               len(dates)))
+            rows.append((DstRow(span, zone,
+                                format_utc_offset(timezone(camera)),
+                                format_utc_offset(timezone(expected)),
+                                len(dates)),
+                         (expected - camera).total_seconds() / 3600))
 
         logging.warning(
             "\nCamera time -------------------------------------------")
-        logging.warning(tabulate.tabulate(rows, headers=DstRow._fields,
+        logging.warning(tabulate.tabulate([row for row, _ in rows],
+                                          headers=DstRow._fields,
                                           tablefmt='pipe'))
 
-        for row in rows:
-            shift = _offset_hours(row.expected) - _offset_hours(row.camera)
+        for row, shift in rows:
             sign = '+' if shift > 0 else '-'
 
             if abs(shift) == 1:
@@ -602,12 +577,47 @@ def run(args):
         if result.returncode != 0 and not (refused or failed):
             raise ValueError(f"exiftool failed: {result.stderr.strip()}")
 
+    def track_path():
+        """Where the track is, or is about to be.
+
+        The track no longer has to be named: -s says which shoot this is, so
+        an unqualified -t -- or none at all -- belongs beside the pictures.
+        An absolute path, a folder or a comma separated list is left alone,
+        since none of those is asking for a default.
+        """
+        given = args.track or DEFAULT_TRACK_NAME
+
+        if ',' in given or os.path.isabs(os.path.expanduser(given)):
+            return given
+
+        return os.path.join(search_dir, given)
+
+    def extract():
+        """Read the track off the GPS logger, before anything is geotagged."""
+        profile = gpsbabel.resolve_profile(args.logger)
+        preflight(profile, args.dry_run)
+
+        target = resolve_output(track_path())
+
+        return extract_track(profile, target, args)
+
     setup_logging(args.verbose)
 
     check()
 
     search_dir = resolve_target(args.search_dir)[0]
-    track_files = resolve_track_files(args.track)
+
+    if args.extract:
+        extracted = extract()
+
+        if extracted is None:
+            # a dry run downloads nothing, so there is nothing to geotag from
+            logging.info("Dry run: the logger was not read, so nothing follows.")
+            return
+
+        track_files = [extracted]
+    else:
+        track_files = resolve_track_files(track_path())
 
     context: Context = initialize_context()
 
