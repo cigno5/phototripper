@@ -3,10 +3,11 @@ import os
 import shutil
 
 from .common import (
-    _KEY_MAP,
     APP_CONFIG_FILENAME,
     _find_config_file,
+    key_to_attr,
     load_app_config,
+    registered_modules,
 )
 
 
@@ -66,12 +67,17 @@ def _do_show(module_name):
         print("No config file found (using hardcoded defaults).")
 
     module_name = module_name if module_name != "common" else None
+    if module_name and module_name not in registered_modules():
+        known = ", ".join(["common", *registered_modules()])
+        print(f"\nUnknown module '{module_name}'. Known modules: {known}")
+        return
+
     config = load_app_config(module_name)
 
     print()
     header = f"[{module_name}]" if module_name else "[common]"
     print(f"Effective settings for {header}:")
     for ini_key in sorted(config):
-        attr = _KEY_MAP.get(ini_key, ini_key)
+        attr = key_to_attr(ini_key)
         value = config[ini_key]
         print(f"  {attr:20s} = {value}")

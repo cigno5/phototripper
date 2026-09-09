@@ -17,7 +17,12 @@ from .common import (
     FileSettings,
     LocationSettings,
     LoggingSettings,
+    discover_files,
+    expand_path,
     get_google_api_key,
+    register_defaults,
+    resolve_target,
+    setup_logging,
 )
 from .location import GeoTraits, PictureLocation
 from .picture import PictureCluster, PictureInfo
@@ -26,7 +31,20 @@ from .picture import PictureCluster, PictureInfo
 # TODO: option for running exiftool and adding GPS coordinates before scanning
 # TODO: configuration file for common options
 
-SUPPORTED_RAW_EXT = ["arw"]
+register_defaults(
+    "sort",
+    {
+        "destination": None,
+        "rename-only": False,
+        "rename-format": "{day} - {place}/IMG_{datetime:extended}_{sequence}",
+        "skip-location": False,
+        "search-radius": 3000,
+        "cache": None,
+        "debug": False,
+    },
+    bools={"rename-only", "skip-location", "debug"},
+    ints={"search-radius"},
+)
 
 VARS_RE = re.compile(r"(?P<prefix>[\s\-_]+)?(\{(?P<var>\w+)(:(?P<format>\w+))?})")
 
@@ -249,17 +267,8 @@ def run(args):
 
         # collects all pictures and read their properties
         logging.info("Collecting pictures...")
-        for _root, _dirs, _files in os.walk(search_dir, topdown=True):
-            logging.info(f"Scanning {_root} ({len(_files)} files)...")
-            _dirs.sort()
-            _files.sort()
-            for _pic_file in [os.path.join(_root, f) for f in _files if f[-3:].lower() in SUPPORTED_RAW_EXT]:
-                if not args.filter or args.filter in _pic_file:
-                    logging.debug(f" > {_pic_file[len(_root):]}")
-                    add_picture_file(_pic_file)
-
-            if not args.recursive:
-                break
+        for _pic_file in discover_files(args.search_dir, args.recursive, args.filter):
+            add_picture_file(_pic_file)
 
     def move():
         def place_none():
@@ -399,19 +408,14 @@ def run(args):
 
         return _ctx
 
-    logging.basicConfig(
-        format='%(message)s',
-        level=logging.DEBUG if args.verbose else logging.INFO)
-    logging.getLogger("geopy").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    setup_logging(args.verbose)
 
     # performs checks
     check()
 
     # Prepare settings
-    search_dir = os.path.abspath(os.path.expanduser(args.search_dir)) if args.search_dir else os.getcwd()
-    assert os.path.isdir(search_dir) and os.path.exists(search_dir), "Search directory is invalid or it doesn't exist"
-    dest_dir = os.path.abspath(os.path.expanduser(args.destination)) if args.destination else search_dir
+    search_dir = resolve_target(args.search_dir)[0]
+    dest_dir = expand_path(args.destination) if args.destination else search_dir
 
     logging.debug("Initializing Phototripper...")
     api_key = get_google_api_key()
