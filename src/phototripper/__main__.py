@@ -20,7 +20,13 @@ def main():
         sys.exit(1)
 
     apply_config_to_args(args, args.command)
-    args.func(args)
+
+    try:
+        args.func(args)
+    except ValueError as error:
+        # the subcommands raise ValueError for anything the user can fix
+        print(f"{parser.prog}: {error}", file=sys.stderr)
+        sys.exit(2)
 
 
 if __name__ == '__main__':

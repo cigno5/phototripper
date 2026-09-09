@@ -1,23 +1,49 @@
+import json
 import logging
 import os
 import re
 import shutil
 import subprocess
-from datetime import datetime
+import tempfile
+from datetime import datetime, timedelta, timezone
 from functools import reduce
 from math import sqrt
 
 from .common import Context, haversine
 
+OFFSET_RE = re.compile(r"^(?P<sign>[-+])(?P<hours>\d{2}):(?P<minutes>\d{2})$")
+
+
+def parse_utc_offset(value):
+    """Turn an EXIF offset such as ``+02:00`` into a :class:`timezone`."""
+    match = OFFSET_RE.match(str(value).strip())
+    if not match:
+        raise ValueError(f"Not a valid UTC offset: {value}")
+
+    sign = -1 if match.group('sign') == '-' else 1
+    delta = timedelta(hours=int(match.group('hours')),
+                      minutes=int(match.group('minutes')))
+    return timezone(sign * delta)
+
+
+def format_utc_offset(tz):
+    """Render a :class:`timezone` back as an EXIF offset such as ``+02:00``."""
+    total = int(tz.utcoffset(None).total_seconds())
+    sign = '-' if total < 0 else '+'
+    hours, minutes = divmod(abs(total) // 60, 60)
+    return f"{sign}{hours:02d}:{minutes:02d}"
+
 
 class PictureInfo:
     T_DATE_TIME_ORIGINAL = "DateTimeOriginal"
+    T_OFFSET_TIME_ORIGINAL = "OffsetTimeOriginal"
     T_SEQUENCE_NUMBER = "SequenceNumber"
     T_GPS_LATITUDE = "GPSLatitude"
     T_GPS_LONGITUDE = "GPSLongitude"
 
     TAGS = {
         T_DATE_TIME_ORIGINAL: lambda x: datetime.strptime(x, "%Y:%m:%d %H:%M:%S"),
+        T_OFFSET_TIME_ORIGINAL: parse_utc_offset,
         T_SEQUENCE_NUMBER: lambda x: int(x),
         T_GPS_LATITUDE: lambda x: float(x),
         T_GPS_LONGITUDE: lambda x: float(x),
@@ -25,19 +51,73 @@ class PictureInfo:
 
     TAG_RE = re.compile(r"(?P<tag>\w+)\s*:\s*(?P<value>.+)$")
 
-    def __init__(self, file):
-        self.file = file
-        self.ctx = Context.get()
+    @staticmethod
+    def _convert_tags(raw, file):
+        """Convert the raw exiftool values, dropping any the camera mangled."""
+        tags = {}
+        for tag, value in raw.items():
+            try:
+                tags[tag] = PictureInfo.TAGS[tag](value)
+            except (KeyError, TypeError, ValueError):
+                logging.debug(f" > ignoring unreadable {tag} '{value}' in {file}")
+        return tags
 
-        # exiftool -n -DateTimeOriginal -SequenceNumber -GPSLatitude -GPSLongitude
+    @staticmethod
+    def _read_tags(file):
+        """Read the tags of a single file."""
         out = subprocess.check_output(["exiftool", "-n", "-s",
                                        *['-' + t for t in PictureInfo.TAGS.keys()],
                                        file])
 
-        self.tags = {}
+        raw = {}
         for line in out.decode('utf-8').splitlines():
-            tag, value = PictureInfo.TAG_RE.search(line).groups()
-            self.tags[tag] = PictureInfo.TAGS[tag](value)
+            match = PictureInfo.TAG_RE.search(line)
+            if match:
+                tag, value = match.groups()
+                raw[tag] = value
+
+        return PictureInfo._convert_tags(raw, file)
+
+    @staticmethod
+    def _read_tags_batch(files):
+        """Read the tags of many files with a single exiftool call.
+
+        The file list goes through an argument file, so a large shoot cannot
+        overflow the command line.
+        """
+        with tempfile.NamedTemporaryFile('w', suffix='.args', delete=False) as arg_file:
+            arg_file.write("\n".join(files))
+            arg_file_name = arg_file.name
+
+        try:
+            out = subprocess.check_output(["exiftool", "-n", "-j",
+                                           *['-' + t for t in PictureInfo.TAGS.keys()],
+                                           "-@", arg_file_name],
+                                          stderr=subprocess.DEVNULL)
+        finally:
+            os.unlink(arg_file_name)
+
+        by_file = {}
+        for entry in json.loads(out.decode('utf-8') or '[]'):
+            source = os.path.normpath(entry.pop("SourceFile"))
+            by_file[source] = PictureInfo._convert_tags(entry, source)
+
+        return by_file
+
+    @classmethod
+    def scan(cls, files):
+        """Build the ``PictureInfo`` of every file, reading them all at once."""
+        if not files:
+            return []
+
+        by_file = cls._read_tags_batch(files)
+        return [cls(f, tags=by_file.get(os.path.normpath(f), {})) for f in files]
+
+    def __init__(self, file, tags=None):
+        self.file = file
+        self.ctx = Context.get()
+
+        self.tags = PictureInfo._read_tags(file) if tags is None else tags
 
         self.sequence = None
         if PictureInfo.T_SEQUENCE_NUMBER in self.tags and self.tags[PictureInfo.T_SEQUENCE_NUMBER] > 0:
@@ -47,13 +127,41 @@ class PictureInfo:
         self.get_place_name = None
 
         _dirname, _basename = os.path.split(self.file)
+        self.dirname = _dirname
         self.filename = _basename
         self.filename_root, _ = os.path.splitext(_basename)
-        self.accessory_files = [os.path.join(_dirname, f) for f in os.listdir(_dirname)
-                                if f.startswith(self.filename_root) and f != _basename]
+
+    @property
+    def accessory_files(self):
+        """The sidecars sitting next to the picture, by filename root.
+
+        Listed on demand: scanning a whole shoot would otherwise read every
+        directory once per file in it.
+        """
+        return [os.path.join(self.dirname, f) for f in os.listdir(self.dirname)
+                if f.startswith(self.filename_root) and f != self.filename]
 
     def get_date_time(self):
         return self.tags[PictureInfo.T_DATE_TIME_ORIGINAL]
+
+    def has_date_time(self):
+        return PictureInfo.T_DATE_TIME_ORIGINAL in self.tags
+
+    def get_utc_offset(self):
+        """The camera's ``OffsetTimeOriginal`` as a timezone, or None."""
+        return self.tags.get(PictureInfo.T_OFFSET_TIME_ORIGINAL)
+
+    def get_utc_datetime(self):
+        """``UTC = DateTimeOriginal - OffsetTimeOriginal``.
+
+        Returns None when either tag is missing, since the camera then gives
+        no way to place the shot on the absolute timeline a GPS track uses.
+        """
+        offset = self.get_utc_offset()
+        if offset is None or not self.has_date_time():
+            return None
+
+        return self.get_date_time().replace(tzinfo=offset).astimezone(timezone.utc)
 
     def get_sequence_number(self):
         return self.sequence

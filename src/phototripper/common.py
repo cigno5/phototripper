@@ -3,6 +3,7 @@ import logging
 import os
 from collections import namedtuple
 from math import asin, cos, radians, sin, sqrt
+from typing import Optional
 
 EARTH_RADIUS = 6371000
 
@@ -169,6 +170,9 @@ def get_google_api_key():
 LocationSettings = namedtuple("LocationSettings", "strategy, search_radius, cache_dir")
 LoggingSettings = namedtuple("LoggingSettings", "verbose, print_summary, debug")
 FileSettings = namedtuple("FileSettings", "search_dir, recursive_search, dest_dir, dry_run, rename_only, rename_pattern")
+GpxSettings = namedtuple("GpxSettings",
+                         "track_files, max_int_secs, max_ext_secs, geosync, "
+                         "sidecar, overwrite_gps, skip_dst_check")
 
 
 class Context:
@@ -178,29 +182,90 @@ class Context:
                  location_settings: LocationSettings,
                  logging_settings: LoggingSettings,
                  file_settings: FileSettings,
-                 gmaps, api_key):
-        
+                 gpx_settings: Optional[GpxSettings] = None):
+
         self.location_settings: LocationSettings = location_settings
         self.logging_settings: LoggingSettings = logging_settings
         self.file_settings: FileSettings = file_settings
-        self.gmaps = gmaps
-        self.api_key = api_key
+        self.gpx_settings: Optional[GpxSettings] = gpx_settings
+        self._api_key = None
+        self._gmaps = None
+
+    # The key and the client are resolved on first use: a run that never asks a
+    # location service anything must not require a configured API key.
+    @property
+    def api_key(self):
+        if self._api_key is None:
+            self._api_key = get_google_api_key()
+        return self._api_key
+
+    @property
+    def gmaps(self):
+        if self._gmaps is None:
+            import googlemaps
+
+            self._gmaps = googlemaps.Client(self.api_key)
+        return self._gmaps
 
     def to_summary(self):
-        return f"""File settings:
-    Search directory        : {self.file_settings.search_dir}
-    Recursive search        : {'yes' if self.file_settings.recursive_search else 'no'}
-    Destination directory   : {self.file_settings.dest_dir}
-    Dry run                 : {'yes' if self.file_settings.dry_run else 'no'}
-    Rename only             : {'yes' if self.file_settings.rename_only else 'no'}
-    Rename pattern          : {self.file_settings.rename_pattern}
+        """Render only the settings that apply to the running subcommand."""
+        return "\n".join(block for block in (self._gpx_block(),
+                                             self._file_block(),
+                                             self._location_block(),
+                                             self._logging_block()) if block)
 
-Location settings:
-    Strategy                : {self.location_settings.strategy}
-    Search radius (m)       : {self.location_settings.search_radius}
-    Cache directory         : {self.location_settings.cache_dir}
+    def _gpx_block(self):
+        if self.gpx_settings is None:
+            return ""
 
-Logging settings:
+        gpx = self.gpx_settings
+        return f"""GPX settings:
+    Track files             : {", ".join(gpx.track_files)}
+    Max interpolation (s)   : {gpx.max_int_secs}
+    Max extrapolation (s)   : {gpx.max_ext_secs}
+    Camera clock sync       : {gpx.geosync or 'none'}
+    Write to                : {'XMP sidecar' if gpx.sidecar else 'original file'}
+    Overwrite existing GPS  : {'yes' if gpx.overwrite_gps else 'no'}
+    Check camera DST        : {'no' if gpx.skip_dst_check else 'yes'}
+"""
+
+    def _file_block(self):
+        if self.file_settings is None:
+            return ""
+
+        def yes_no(flag):
+            return 'yes' if flag else 'no'
+
+        files = self.file_settings
+        lines = [f"    Search directory        : {files.search_dir}",
+                 f"    Recursive search        : {yes_no(files.recursive_search)}"]
+
+        # only the subcommands that move files have somewhere to move them to
+        moves_files = files.rename_pattern is not None
+        if moves_files:
+            lines.append(f"    Destination directory   : {files.dest_dir}")
+
+        lines.append(f"    Dry run                 : {yes_no(files.dry_run)}")
+
+        if moves_files:
+            lines.append(f"    Rename only             : {yes_no(files.rename_only)}")
+            lines.append(f"    Rename pattern          : {files.rename_pattern}")
+
+        return "File settings:\n" + "\n".join(lines) + "\n"
+
+    def _location_block(self):
+        if self.location_settings is None:
+            return ""
+
+        location = self.location_settings
+        return f"""Location settings:
+    Strategy                : {location.strategy}
+    Search radius (m)       : {location.search_radius}
+    Cache directory         : {location.cache_dir}
+"""
+
+    def _logging_block(self):
+        return f"""Logging settings:
     Verbose                 : {'yes' if self.logging_settings.verbose else 'no'}
     Print summary           : {'yes' if self.logging_settings.print_summary else 'no'}
     Debug                   : {'yes' if self.logging_settings.debug else 'no'}

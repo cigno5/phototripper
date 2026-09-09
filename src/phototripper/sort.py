@@ -8,7 +8,6 @@ from collections import namedtuple
 from datetime import datetime
 from math import cos, radians, sin
 
-import googlemaps
 import tabulate
 from unidecode import unidecode
 
@@ -19,7 +18,6 @@ from .common import (
     LoggingSettings,
     discover_files,
     expand_path,
-    get_google_api_key,
     register_defaults,
     resolve_target,
     setup_logging,
@@ -249,7 +247,7 @@ def run(args):
 
             all_pictures.append(picture)
 
-            if picture.has_latlon():
+            if picture.has_latlon() and context.location_settings.strategy != 'none':
                 cluster_found = False
                 for cluster in geo_clusters:
                     if cluster.is_in_range(picture):
@@ -399,9 +397,7 @@ def run(args):
         _ctx = Context(
             loc_settings,
             logging_settings,
-            file_settings,
-            gmaps,
-            api_key
+            file_settings
         )
 
         Context.set(_ctx)
@@ -418,9 +414,6 @@ def run(args):
     dest_dir = expand_path(args.destination) if args.destination else search_dir
 
     logging.debug("Initializing Phototripper...")
-    api_key = get_google_api_key()
-    gmaps: googlemaps.Client = googlemaps.Client(api_key)
-
     all_pictures: list[PictureInfo] = []
     geo_clusters: list[PictureCluster] = []
     locations: list[PictureLocation] = []
