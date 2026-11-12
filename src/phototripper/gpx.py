@@ -1,3 +1,4 @@
+import copy
 import logging
 import math
 import os
@@ -595,11 +596,20 @@ def run(args):
     def extract():
         """Read the track off the GPS logger, before anything is geotagged."""
         profile = gpsbabel.resolve_profile(args.logger)
-        preflight(profile, args.dry_run)
+        # reading is harmless, so a dry run reads too: it has to, to analyse
+        preflight(profile)
 
-        target = resolve_output(track_path())
+        if not args.dry_run:
+            return extract_track(profile, resolve_output(track_path()), args)
 
-        return extract_track(profile, target, args)
+        # ...but into a scratch file, and never clearing the logger
+        if args.wipe:
+            logging.info("Dry run: the logger is read, but not cleared.")
+        read_only = copy.copy(args)
+        read_only.dry_run, read_only.wipe = False, False
+        target = os.path.join(scratch.name, DEFAULT_TRACK_NAME)
+
+        return extract_track(profile, target, read_only)
 
     setup_logging(args.verbose)
 
@@ -607,15 +617,11 @@ def run(args):
 
     search_dir = resolve_target(args.search_dir)[0]
 
+    # where a dry run puts the track it reads; gone when the run ends
+    scratch = tempfile.TemporaryDirectory()
+
     if args.extract:
-        extracted = extract()
-
-        if extracted is None:
-            # a dry run downloads nothing, so there is nothing to geotag from
-            logging.info("Dry run: the logger was not read, so nothing follows.")
-            return
-
-        track_files = [extracted]
+        track_files = [extract()]
     else:
         track_files = resolve_track_files(track_path())
 

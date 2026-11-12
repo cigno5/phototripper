@@ -151,11 +151,13 @@ def test_extract_reads_the_logger_and_then_geotags(shoot, caplog, monkeypatch,
     assert "1 of 5 picture(s) can be geotagged" in out
 
 
-def test_a_dry_run_leaves_the_logger_alone(shoot, caplog, monkeypatch,
-                                           gpsbabel_formats):
+def test_a_dry_run_reads_the_logger_but_keeps_and_clears_nothing(
+        shoot, caplog, monkeypatch, gpsbabel_formats):
     from phototripper import gpsbabel
 
-    (shoot / "track.gpx").unlink()
+    recorded = shoot / "track.gpx"
+    track = recorded.read_text()
+    recorded.unlink()
 
     monkeypatch.setattr(gpsbabel, "check", lambda: None)
     monkeypatch.setattr(gpsbabel, "sanity_check", lambda *a, **kw: None)
@@ -163,17 +165,25 @@ def test_a_dry_run_leaves_the_logger_alone(shoot, caplog, monkeypatch,
                         lambda name=None: gpsbabel.Profile(
                             "gt730", "skytraq", "/dev/null"))
 
-    def refuse(argv, timeout=None):
-        raise AssertionError("a dry run must not talk to the logger")
+    calls = []
 
-    monkeypatch.setattr(gpsbabel, "run", refuse)
+    def fake_run(argv, timeout=None):
+        calls.append(argv)
+        with open(argv[argv.index("-F") + 1], "w") as out:
+            out.write(track)
+        return gpsbabel.Result(argv, 0, "", "", False)
+
+    monkeypatch.setattr(gpsbabel, "run", fake_run)
 
     with caplog.at_level(logging.DEBUG):
         gpx.run(Args(search_dir=str(shoot), extract=True, wipe=True, yes=True))
 
     out = "\n".join(r.getMessage() for r in caplog.records)
-    assert "Dry run, nothing was read" in out
-    assert "nothing follows" in out
+    assert len(calls) == 1
+    assert "erase" not in " ".join(calls[0]), "a dry run must never clear"
+    assert not recorded.exists(), "a dry run leaves no track behind"
+    assert "1 of 5 picture(s) can be geotagged" in out
+    assert "nothing was written" in out
 
 
 def latlon(path):
