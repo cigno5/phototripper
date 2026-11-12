@@ -308,8 +308,12 @@ def _geo_decode(cluster: PictureCluster, service):
             data = json.load(df)
             logging.debug(f" > data loaded from cache file {_data_file}")
 
-    except FileNotFoundError:
-        with open(_data_file, 'w') as df:
+    except (FileNotFoundError, json.JSONDecodeError):
+        # missing cache, or an empty one left by an older failed run: fetch first,
+        # so a failed call writes nothing
+        import googlemaps  # type: ignore[import-untyped]
+
+        try:
             if service == 'geocode':
                 data = ctx.gmaps.reverse_geocode(cluster.center)
                 logging.debug(" > data loaded from Google reverse geocode API")
@@ -339,14 +343,25 @@ def _geo_decode(cluster: PictureCluster, service):
                 r = requests.post('https://places.googleapis.com/v1/places:searchNearby',
                                   headers=headers,
                                   json=json_data)
-                r.raise_for_status()
-                data = r.json()['places']
+                if not r.ok:
+                    try:
+                        _reason = r.json()['error']['message']
+                    except (ValueError, KeyError, TypeError):
+                        _reason = r.text or r.reason
+                    raise ValueError(f"Google Places API failed ({r.status_code}): {_reason}")
+                data = r.json().get('places', [])
                 logging.debug(" > data loaded from Google Places 'Search Nearby' API")
             elif service == 'nominatim':
                 raise NotImplementedError('Nominatim not implemented yet')
+        except googlemaps.exceptions.ApiError as error:
+            raise ValueError(f"Google Geocoding API failed: {error.status}"
+                             f"{f' ({error.message})' if error.message else ''}") from error
+        except (googlemaps.exceptions.TransportError, requests.RequestException) as error:
+            raise ValueError(f"Cannot reach Google Maps API: {error}") from error
 
-            logging.debug(f" > data stored in cache file {_data_file}")
+        with open(_data_file, 'w') as df:
             json.dump(data, df)
+        logging.debug(f" > data stored in cache file {_data_file}")
 
     return [GeoTraits(cluster.center, cluster.radius, service, obj) for obj in data]
 
