@@ -131,7 +131,10 @@ def register_args(subparsers):
     file_group.add_argument('-s', "--search-dir",
                             help="Directory to scan, or a single picture")
     file_group.add_argument('-t', "--track",
-                            help="GPS track: the file to write when extracting, "
+                            help="GPS track: where to keep the track when "
+                                 "extracting (without it the track is read "
+                                 "into a temporary file, kept beside the "
+                                 "pictures only with --wipe), "
                                  "otherwise a .gpx file, a comma separated list "
                                  "of them, or a folder holding them. A bare name "
                                  "sits in the search directory; the default is "
@@ -607,8 +610,14 @@ def run(args):
         # reading is harmless, so a dry run reads too: it has to, to analyse
         preflight(profile)
 
-        if not args.dry_run:
+        # without -t the track is only a means to geotag, so it lives in
+        # scratch -- unless the logger is cleared, then it is the only copy
+        if not args.dry_run and (args.track or args.wipe):
             return extract_track(profile, resolve_output(track_path()), args)
+
+        if not args.dry_run:
+            target = os.path.join(scratch.name, DEFAULT_TRACK_NAME)
+            return extract_track(profile, target, args)
 
         # ...but into a scratch file, and never clearing the logger
         if args.wipe:
@@ -625,7 +634,7 @@ def run(args):
 
     search_dir = resolve_target(args.search_dir)[0]
 
-    # where a dry run puts the track it reads; gone when the run ends
+    # where a track read only to geotag goes; gone when the run ends
     scratch = tempfile.TemporaryDirectory()
 
     if args.extract:

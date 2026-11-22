@@ -135,7 +135,8 @@ def test_extract_reads_the_logger_and_then_geotags(shoot, caplog, monkeypatch,
 
     def fake_run(argv, timeout=None):
         calls.append(argv)
-        (shoot / "track.gpx").write_text(track)
+        with open(argv[argv.index("-F") + 1], "w") as out:
+            out.write(track)
         return gpsbabel.Result(argv, 0, "", "", False)
 
     monkeypatch.setattr(gpsbabel, "run", fake_run)
@@ -145,10 +146,18 @@ def test_extract_reads_the_logger_and_then_geotags(shoot, caplog, monkeypatch,
 
     out = "\n".join(r.getMessage() for r in caplog.records)
 
-    # the track landed beside the pictures, and was then used as any track is
-    assert calls[0][calls[0].index("-F") + 1] == str(shoot / "track.gpx")
+    # without -t the track went to a scratch file, used as any track is
+    assert not recorded.exists(), "no -t, so no track left beside the pictures"
     assert "erase" not in calls[0][3], "nothing asked for the logger to be cleared"
     assert "1 of 5 picture(s) can be geotagged" in out
+
+    # with -t the track is kept where asked
+    calls.clear()
+    Context.context = None
+    gpx.run(Args(search_dir=str(shoot), extract=True, dry_run=False,
+                 track="kept.gpx"))
+    assert calls[0][calls[0].index("-F") + 1] == str(shoot / "kept.gpx")
+    assert (shoot / "kept.gpx").exists()
 
 
 def test_a_dry_run_reads_the_logger_but_keeps_and_clears_nothing(

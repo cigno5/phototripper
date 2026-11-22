@@ -27,10 +27,14 @@ busy with. `--device` probes just one port, and `--yes` skips the question.
 With a logger configured, `gpx` can fetch the track itself:
 
 ```bash
-# read the logger into <shoot>/track.gpx, then geotag the pictures with it
+# read the logger into a temporary file, then geotag the pictures with it
 phototripper gpx -s ~/shoot --extract
 
+# ...keeping the track as <shoot>/holiday.gpx
+phototripper gpx -s ~/shoot --extract -t holiday.gpx
+
 # ...and clear the logger, once the track it held is safely on disk
+# (with --wipe the track is always kept, in <shoot>/track.gpx without -t)
 phototripper gpx -s ~/shoot --extract --wipe
 ```
 
