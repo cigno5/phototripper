@@ -207,7 +207,14 @@ def _vvv_fff(_v):
 
 
 def register_args(subparsers):
-    parser = subparsers.add_parser('sort', help='Sort and rename photo files')
+    parser = subparsers.add_parser(
+        'sort', help='Sort and rename photo files',
+        description="Read the EXIF data of the pictures in a directory, group "
+                    "nearby shots, name each group after its location with the "
+                    "Google Geocoding and Places APIs, then rename and move the "
+                    "files following --rename-format. Slashes in the format "
+                    "create subdirectories. Use --dry-run to preview and "
+                    "--skip-location to work offline.")
 
     file_group = parser.add_argument_group('File options')
     file_group.add_argument('-s', "--search-dir", help="Search directory")

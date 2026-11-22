@@ -31,12 +31,21 @@ DEFAULT_TRACK_NAME = "track.gpx"
 
 def register_args(subparsers):
     parser = subparsers.add_parser(
-        'gpslogger', help='Find, read and clear a GPS logger')
+        'gpslogger', help='Find, read and clear a GPS logger',
+        description="Talk to a GPS logger plugged in over USB/serial, through "
+                    "gpsbabel. Find out how to reach it (detect), keep it as a "
+                    "named profile in phototripper.ini, then download its "
+                    "track (extract) or clear its memory (wipe).")
 
     verbs = parser.add_subparsers(dest='verb', required=True)
 
     detect = verbs.add_parser(
-        'detect', help='Work out how to talk to a plugged in GPS logger')
+        'detect', help='Work out how to talk to a plugged in GPS logger',
+        description="Scan the serial ports and probe them, read-only, with "
+                    "every gpsbabel format that can read tracks. Nothing is "
+                    "ever erased. Use --save to store what answered as a "
+                    "[logger:NAME] profile, and --device to keep the probe "
+                    "off other serial hardware.")
     detect.add_argument('--save', metavar='NAME',
                         help="Record what worked as a named logger")
     detect.add_argument('--force', action='store_true', default=None,
@@ -51,20 +60,29 @@ def register_args(subparsers):
                         help="Logs more")
     detect.set_defaults(func=run_detect)
 
-    listing = verbs.add_parser('list', help='Show the configured GPS loggers')
+    listing = verbs.add_parser(
+        'list', help='Show the configured GPS loggers',
+        description="List the [logger:NAME] profiles found in phototripper.ini, "
+                    "with the gpsbabel format and port each one uses.")
     listing.add_argument("--verbose", action='store_true', default=None,
                          help="Logs more")
     listing.set_defaults(func=run_list)
 
     test = verbs.add_parser(
-        'test', help='Check that a configured logger still answers')
+        'test', help='Check that a configured logger still answers',
+        description="Probe a saved logger profile, read-only, to confirm the "
+                    "device is plugged in and still answers on its port.")
     test.add_argument('name', nargs='?', help="Which logger; the only one by default")
     test.add_argument("--verbose", action='store_true', default=None,
                       help="Logs more")
     test.set_defaults(func=run_test)
 
     extract = verbs.add_parser(
-        'extract', help='Download the track from the GPS logger')
+        'extract', help='Download the track from the GPS logger',
+        description="Read the track off a configured GPS logger and write it "
+                    "as a GPX file, optionally keeping only the points between "
+                    "--date-from and --date-to. With --wipe the logger is "
+                    "cleared once the file is written.")
     _add_logger_args(extract)
     extract.add_argument('-t', "--track", default=None,
                          help=f"Where to write the track "
@@ -80,7 +98,10 @@ def register_args(subparsers):
     extract.set_defaults(func=run_extract)
 
     wipe = verbs.add_parser(
-        'wipe', help='Clear the GPS logger, downloading nothing first')
+        'wipe', help='Clear the GPS logger, downloading nothing first',
+        description="Erase the memory of a configured GPS logger without "
+                    "downloading anything. This cannot be undone: asks for "
+                    "confirmation unless --yes is given.")
     _add_logger_args(wipe)
     wipe.set_defaults(func=run_wipe)
 

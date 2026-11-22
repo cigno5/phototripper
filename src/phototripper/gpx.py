@@ -117,7 +117,15 @@ FAILED_RE = re.compile(r"^(?P<count>\d+) files weren't updated due to errors$")
 
 def register_args(subparsers):
     parser = subparsers.add_parser(
-        'gpx', help='Geotag pictures from a GPS track')
+        'gpx', help='Geotag pictures from a GPS track',
+        description="Write GPS coordinates into pictures by matching their "
+                    "capture time against a GPX track, with exiftool -geotag. "
+                    "Every shot is checked against the track before anything "
+                    "is written, and gaps or out-of-range shots are reported "
+                    "with suggested --max-int-secs/--max-ext-secs values. "
+                    "Pictures that already carry coordinates are left alone "
+                    "unless --overwrite-gps is given. With --extract the track "
+                    "is first read off a configured GPS logger.")
 
     file_group = parser.add_argument_group('File options')
     file_group.add_argument('-s', "--search-dir",

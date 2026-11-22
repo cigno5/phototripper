@@ -6,7 +6,13 @@ from .common import apply_config_to_args
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='phototripper')
+    parser = argparse.ArgumentParser(
+        prog='phototripper',
+        description="Organize RAW photos by date and place. Geotag pictures "
+                    "from a GPS track, read the track off a GPS logger, then "
+                    "rename and move the pictures into a folder hierarchy "
+                    "named after where and when they were shot. Settings come "
+                    "from phototripper.ini, overridden by the command line.")
     subparsers = parser.add_subparsers(dest='command')
 
     sort.register_args(subparsers)

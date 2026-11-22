@@ -12,7 +12,12 @@ from .common import (
 
 def register_args(subparsers):
     parser = subparsers.add_parser(
-        "config", help="Manage phototripper configuration"
+        "config", help="Manage phototripper configuration",
+        description="Show or create the phototripper.ini configuration. "
+                    "Settings are layered: built-in defaults, then the [common] "
+                    "section, then the subcommand's own section, then the "
+                    "command line. The file is searched in ./, ~/, ~/.config/ "
+                    "and $PHOTOTRIPPER_CONFIG."
     )
     parser.add_argument(
         "--init",
